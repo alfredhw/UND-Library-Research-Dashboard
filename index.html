@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Impact Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --und-green: #009A44;
+            --und-green-dark: #007a36;
+            --und-green-light: #e6f5ec;
+            --und-black: #1a1a1a;
+            --und-gray: #6b7280;
+            --und-gray-light: #f3f4f6;
+            --und-white: #ffffff;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.1);
+            --radius: 8px;
+
+            /* Chart palette */
+            --chart-1: #009A44;
+            --chart-2: #2563eb;
+            --chart-3: #f59e0b;
+            --chart-4: #ef4444;
+            --chart-5: #8b5cf6;
+            --chart-6: #06b6d4;
+            --chart-7: #ec4899;
+            --chart-8: #84cc16;
+
+            /* OA status colors */
+            --oa-gold: #f59e0b;
+            --oa-green: #22c55e;
+            --oa-hybrid: #3b82f6;
+            --oa-bronze: #d97706;
+            --oa-diamond: #a855f7;
+            --oa-closed: #9ca3af;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--und-gray-light);
+            color: var(--und-black);
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: var(--und-green);
+            color: var(--und-white);
+            padding: 1.25rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .header-left h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .header-left p {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .header-right label {
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .institution-select {
+            padding: 0.5rem 0.75rem;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: var(--radius);
+            background: rgba(255,255,255,0.15);
+            color: var(--und-white);
+            font-size: 0.9rem;
+            cursor: pointer;
+            min-width: 260px;
+        }
+        .institution-select option {
+            background: var(--und-white);
+            color: var(--und-black);
+        }
+        .institution-select:focus {
+            outline: none;
+            border-color: rgba(255,255,255,0.7);
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-overlay.active {
+            display: flex;
+        }
+        .loading-spinner {
+            text-align: center;
+        }
+        .loading-spinner .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid var(--und-gray-light);
+            border-top-color: var(--und-green);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .loading-spinner p {
+            margin-top: 1rem;
+            color: var(--und-gray);
+            font-size: 0.9rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Main grid */
+        .dashboard {
+            max-width: 1400px;
+            margin: 1.5rem auto;
+            padding: 0 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.25rem;
+        }
+
+        /* Card */
+        .card {
+            background: var(--und-white);
+            border-radius: var(--radius);
+            box-shadow: var(--card-shadow);
+            padding: 1.25rem;
+            transition: box-shadow 0.2s;
+        }
+        .card:hover { box-shadow: var(--card-shadow-hover); }
+        .card-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--und-gray);
+            margin-bottom: 1rem;
+        }
+
+        /* Stat cards row */
+        .stat-cards { grid-column: span 12; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .stat-card {
+            flex: 1;
+            min-width: 150px;
+            background: var(--und-white);
+            border-radius: var(--radius);
+            box-shadow: var(--card-shadow);
+            padding: 1.25rem;
+            text-align: center;
+            border-top: 3px solid var(--und-green);
+            transition: box-shadow 0.2s;
+        }
+        .stat-card:hover { box-shadow: var(--card-shadow-hover); }
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--und-black);
+            line-height: 1.2;
+        }
+        .stat-card .stat-label {
+            font-size: 0.8rem;
+            color: var(--und-gray);
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .stat-card .stat-sub {
+            font-size: 0.75rem;
+            color: var(--und-gray);
+            margin-top: 0.4rem;
+        }
+        .stat-card .stat-und {
+            font-size: 0.7rem;
+            color: var(--und-green);
+            margin-top: 0.35rem;
+            font-weight: 500;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: opacity 0.3s, max-height 0.3s;
+        }
+        .stat-card .stat-und.visible {
+            opacity: 1;
+            max-height: 2rem;
+        }
+
+        /* Panel sizing */
+        .panel-full { grid-column: span 12; }
+        .panel-half { grid-column: span 6; }
+        .panel-third { grid-column: span 4; }
+
+        /* Chart containers */
+        .chart-container {
+            position: relative;
+            width: 100%;
+        }
+        .chart-container.tall { height: 350px; }
+        .chart-container.medium { height: 300px; }
+        .chart-container.short { height: 250px; }
+
+        /* Journal list */
+        .bar-list { list-style: none; }
+        .bar-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.45rem 0;
+            border-bottom: 1px solid var(--und-gray-light);
+            font-size: 0.85rem;
+        }
+        .bar-list li:last-child { border-bottom: none; }
+        .bar-list .bar-rank {
+            color: var(--und-gray);
+            font-size: 0.75rem;
+            min-width: 1.5rem;
+            text-align: right;
+        }
+        .bar-list .bar-name {
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .bar-list .bar-value {
+            font-weight: 600;
+            color: var(--und-black);
+            white-space: nowrap;
+        }
+
+        /* Top cited works table */
+        .cited-works-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        .cited-works-table thead th {
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--und-gray);
+            padding: 0.5rem 0.75rem;
+            border-bottom: 2px solid var(--und-gray-light);
+        }
+        .cited-works-table thead th:last-child,
+        .cited-works-table tbody td:last-child {
+            text-align: right;
+        }
+        .cited-works-table tbody tr {
+            border-bottom: 1px solid var(--und-gray-light);
+            transition: background 0.15s;
+        }
+        .cited-works-table tbody tr:hover {
+            background: var(--und-green-light);
+        }
+        .cited-works-table tbody td {
+            padding: 0.6rem 0.75rem;
+            vertical-align: top;
+        }
+        .cited-works-table .work-title {
+            font-weight: 500;
+            color: var(--und-black);
+            line-height: 1.35;
+        }
+        .cited-works-table .work-title a {
+            color: var(--und-black);
+            text-decoration: none;
+        }
+        .cited-works-table .work-title a:hover {
+            color: var(--und-green);
+            text-decoration: underline;
+        }
+        .cited-works-table .work-meta {
+            font-size: 0.75rem;
+            color: var(--und-gray);
+            margin-top: 0.2rem;
+        }
+        .cited-works-table .cite-count {
+            font-weight: 700;
+            color: var(--und-black);
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
+        .cited-works-table .libkey-link {
+            display: inline-block;
+            margin-top: 0.3rem;
+            font-size: 0.72rem;
+            color: var(--und-green);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .cited-works-table .libkey-link:hover {
+            text-decoration: underline;
+        }
+
+        /* APC disclaimer */
+        .disclaimer {
+            font-size: 0.75rem;
+            color: var(--und-gray);
+            margin-top: 0.75rem;
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        /* Footer */
+        .footer {
+            max-width: 1400px;
+            margin: 1rem auto 2rem;
+            padding: 0 1.5rem;
+            font-size: 0.75rem;
+            color: var(--und-gray);
+            text-align: center;
+        }
+        .footer a { color: var(--und-green); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .panel-half { grid-column: span 12; }
+            .panel-third { grid-column: span 6; }
+        }
+        @media (max-width: 768px) {
+            .header { padding: 1rem; flex-direction: column; align-items: flex-start; }
+            .institution-select { min-width: 100%; }
+            .dashboard { padding: 0 1rem; gap: 1rem; }
+            .panel-third { grid-column: span 12; }
+            .stat-card .stat-value { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <div class="header-left">
+        <h1>Research Impact Dashboard</h1>
+        <p>Faculty scholarship &amp; Open Access metrics powered by OpenAlex</p>
+    </div>
+    <div class="header-right">
+        <label for="institution-select">Institution:</label>
+        <select id="institution-select" class="institution-select"></select>
+    </div>
+</header>
+
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading dashboard data...</p>
+    </div>
+</div>
+
+<main class="dashboard" id="dashboard">
+
+    <!-- Row 1: Stat Cards -->
+    <div class="stat-cards" id="stat-cards">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total-works">--</div>
+            <div class="stat-label">Total Works</div>
+            <div class="stat-sub" id="stat-total-works-sub"></div>
+            <div class="stat-und" id="stat-und-total-works"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-oa-pct">--</div>
+            <div class="stat-label">Open Access Rate</div>
+            <div class="stat-sub" id="stat-oa-pct-sub"></div>
+            <div class="stat-und" id="stat-und-oa-pct"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-citations">--</div>
+            <div class="stat-label">Total Citations</div>
+            <div class="stat-sub" id="stat-citations-sub"></div>
+            <div class="stat-und" id="stat-und-citations"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-hindex">--</div>
+            <div class="stat-label">H-Index</div>
+            <div class="stat-und" id="stat-und-hindex"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-mean-cite">--</div>
+            <div class="stat-label">2yr Mean Citedness</div>
+            <div class="stat-und" id="stat-und-mean-cite"></div>
+        </div>
+    </div>
+
+    <!-- Row 2: Publication Volume + OA Trend -->
+    <div class="card panel-half">
+        <div class="card-title">Publication Volume Over Time</div>
+        <div class="chart-container tall">
+            <canvas id="chart-volume"></canvas>
+        </div>
+    </div>
+    <div class="card panel-half">
+        <div class="card-title">Open Access Rate Trend</div>
+        <div class="chart-container tall">
+            <canvas id="chart-oa-trend"></canvas>
+        </div>
+    </div>
+
+    <!-- Row 3: OA Breakdown + Research Domains -->
+    <div class="card panel-third">
+        <div class="card-title">OA Status Breakdown (All Time)</div>
+        <div class="chart-container medium">
+            <canvas id="chart-oa-status"></canvas>
+        </div>
+    </div>
+    <div class="card panel-third">
+        <div class="card-title">Research Domains</div>
+        <div class="chart-container medium">
+            <canvas id="chart-domains"></canvas>
+        </div>
+    </div>
+    <div class="card panel-third">
+        <div class="card-title">Estimated APC Exposure</div>
+        <div class="chart-container short">
+            <canvas id="chart-apc"></canvas>
+        </div>
+        <p class="disclaimer" id="apc-disclaimer">
+            Reflects journal list prices for Gold &amp; Hybrid OA articles. Actual costs may differ due to transformative agreements, waivers, and multi-author cost sharing.
+        </p>
+    </div>
+
+    <!-- Row 4: College Breakdown + Top Journals -->
+    <div class="card panel-half">
+        <div class="card-title" id="college-title">Estimated College/School Breakdown</div>
+        <div class="chart-container tall">
+            <canvas id="chart-colleges"></canvas>
+        </div>
+    </div>
+    <div class="card panel-half">
+        <div class="card-title">Top Journals &amp; Venues</div>
+        <ul class="bar-list" id="journals-list">
+            <li><span class="bar-name">Loading...</span></li>
+        </ul>
+    </div>
+
+    <!-- Row 5: Most Cited Works -->
+    <div class="card panel-full">
+        <div class="card-title">Most Cited Works</div>
+        <table class="cited-works-table">
+            <thead>
+                <tr>
+                    <th style="width: 2.5rem;">#</th>
+                    <th>Work</th>
+                    <th style="width: 5rem;">Year</th>
+                    <th style="width: 6rem;">Citations</th>
+                </tr>
+            </thead>
+            <tbody id="cited-works-body">
+                <tr><td colspan="4" style="text-align:center; color: var(--und-gray);">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+</main>
+
+<footer class="footer">
+    Data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a>, an open catalog of the global research system.
+    Updated continuously. Dashboard by Chester Fritz Library, University of North Dakota.
+</footer>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+const INSTITUTIONS = {
+    'I24571045':  'University of North Dakota',
+    'I57328836':  'North Dakota State University',
+    'I177156846': 'South Dakota State University',
+    'I189957204': 'University of South Dakota',
+    'I173911158': 'Iowa State University',
+    'I114395901': 'University of Nebraska-Lincoln',
+    'I23732399':  'Montana State University',
+    'I6750721':   'University of Montana',
+    'I155093810': 'University of Idaho',
+    'I120156002': 'Boise State University',
+    'I12834331':  'University of Wyoming',
+    'I121980950': 'Utah State University'
+};
+
+const DEFAULT_INSTITUTION = 'I24571045';
+const OPENALEX_BASE = 'https://api.openalex.org';
+const MAILTO = 'mailto=library@und.edu'; // polite pool
+const MIN_YEAR = 2010;
+
+// OA status colors and labels
+const OA_STATUS_META = {
+    gold:    { color: '#f59e0b', label: 'Gold' },
+    green:   { color: '#22c55e', label: 'Green' },
+    hybrid:  { color: '#3b82f6', label: 'Hybrid' },
+    bronze:  { color: '#d97706', label: 'Bronze' },
+    diamond: { color: '#a855f7', label: 'Diamond' },
+    closed:  { color: '#9ca3af', label: 'Closed' }
+};
+
+// OpenAlex field ID -> friendly college name mapping
+// This is a UND-specific mapping; for other institutions it shows the field name
+const UND_COLLEGE_MAP = {
+    'medicine':                                      'School of Medicine & Health Sciences',
+    'biochemistry, genetics and molecular biology':  'School of Medicine & Health Sciences',
+    'neuroscience':                                  'School of Medicine & Health Sciences',
+    'health professions':                            'School of Medicine & Health Sciences',
+    'pharmacology, toxicology and pharmaceutics':    'School of Medicine & Health Sciences',
+    'veterinary':                                    'School of Medicine & Health Sciences',
+    'dentistry':                                     'School of Medicine & Health Sciences',
+    'immunology and microbiology':                   'School of Medicine & Health Sciences',
+    'nursing':                                       'College of Nursing & Prof. Disciplines',
+    'engineering':                                   'College of Engineering & Mines',
+    'computer science':                              'College of Engineering & Mines',
+    'materials science':                             'College of Engineering & Mines',
+    'chemical engineering':                          'College of Engineering & Mines',
+    'energy':                                        'College of Engineering & Mines',
+    'psychology':                                    'College of Arts & Sciences',
+    'chemistry':                                     'College of Arts & Sciences',
+    'physics and astronomy':                         'College of Arts & Sciences',
+    'mathematics':                                   'College of Arts & Sciences',
+    'arts and humanities':                           'College of Arts & Sciences',
+    'agricultural and biological sciences':          'College of Arts & Sciences',
+    'environmental science':                         'College of Arts & Sciences',
+    'earth and planetary sciences':                  'College of Arts & Sciences',
+    'social sciences':                               'College of Educ. & Human Development',
+    'decision sciences':                             'College of Business & Public Admin',
+    'business, management and accounting':           'College of Business & Public Admin',
+    'economics, econometrics and finance':           'College of Business & Public Admin',
+    'multidisciplinary':                             'Multidisciplinary'
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let currentInstitutionId = DEFAULT_INSTITUTION;
+let charts = {};
+let undData = null; // Cached UND institution data for comparison overlays
+const CURRENT_YEAR = new Date().getFullYear();
+
+// ============================================================
+// API HELPERS
+// ============================================================
+async function fetchOA(endpoint, params = {}) {
+    const url = new URL(`${OPENALEX_BASE}${endpoint}`);
+    url.searchParams.set('per_page', '200');
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    // Append mailto for polite pool
+    const sep = url.search ? '&' : '?';
+    const fullUrl = url.toString() + (url.toString().includes(MAILTO) ? '' : `${sep}${MAILTO}`);
+
+    const res = await fetch(fullUrl);
+    if (!res.ok) throw new Error(`OpenAlex API error: ${res.status} ${res.statusText}`);
+    return res.json();
+}
+
+async function fetchInstitution(id) {
+    return fetchOA(`/institutions/${id}`);
+}
+
+async function fetchGroupBy(instId, groupBy, extraFilters = '') {
+    const filter = `authorships.institutions.id:${instId}${extraFilters}`;
+    return fetchOA('/works', { filter, group_by: groupBy });
+}
+
+function filterYears(countsByYear, minYear = MIN_YEAR) {
+    return countsByYear
+        .filter(d => d.year >= minYear)
+        .sort((a, b) => a.year - b.year);
+}
+
+function formatNumber(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(n >= 10_000 ? 0 : 1) + 'K';
+    return n.toLocaleString();
+}
+
+function formatCurrency(n) {
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return '$' + (n / 1_000).toFixed(0) + 'K';
+    return '$' + n.toLocaleString();
+}
+
+// ============================================================
+// CHART DEFAULTS
+// ============================================================
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#6b7280';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth = 10;
+Chart.defaults.plugins.legend.labels.padding = 16;
+
+function destroyChart(key) {
+    if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+}
+
+// ============================================================
+// PANEL RENDERERS
+// ============================================================
+
+// --- Stat Cards ---
+function getYearData(inst, year) {
+    return (inst.counts_by_year || []).find(d => d.year === year);
+}
+
+function renderStatCards(inst) {
+    const cby = filterYears(inst.counts_by_year || []);
+    // Use current calendar year, not latest year in data
+    const currentYearData = getYearData(inst, CURRENT_YEAR);
+    // Fall back to last complete year if current year has no data
+    const displayYear = currentYearData && currentYearData.works_count > 0
+        ? CURRENT_YEAR : CURRENT_YEAR - 1;
+    const yearData = getYearData(inst, displayYear);
+
+    const totalWorks = inst.works_count || 0;
+    const totalCited = inst.cited_by_count || 0;
+
+    document.getElementById('stat-total-works').textContent = formatNumber(totalWorks);
+    document.getElementById('stat-total-works-sub').textContent =
+        yearData ? `${yearData.works_count.toLocaleString()} in ${displayYear}` : '';
+
+    // OA pct from display year
+    if (yearData && yearData.works_count > 0) {
+        const oaPct = ((yearData.oa_works_count / yearData.works_count) * 100).toFixed(0);
+        document.getElementById('stat-oa-pct').textContent = oaPct + '%';
+        document.getElementById('stat-oa-pct-sub').textContent = `${displayYear} publications`;
+    } else {
+        document.getElementById('stat-oa-pct').textContent = '--';
+        document.getElementById('stat-oa-pct-sub').textContent = '';
+    }
+
+    document.getElementById('stat-citations').textContent = formatNumber(totalCited);
+    document.getElementById('stat-citations-sub').textContent =
+        yearData ? `${formatNumber(yearData.cited_by_count)} in ${displayYear}` : '';
+
+    document.getElementById('stat-hindex').textContent =
+        inst.summary_stats?.h_index?.toLocaleString() || '--';
+    document.getElementById('stat-mean-cite').textContent =
+        inst.summary_stats?.['2yr_mean_citedness']?.toFixed(2) || '--';
+
+    // Show/hide UND baseline comparison
+    const isOther = currentInstitutionId !== DEFAULT_INSTITUTION;
+    const undEls = document.querySelectorAll('.stat-und');
+    undEls.forEach(el => el.classList.toggle('visible', isOther));
+
+    if (isOther && undData) {
+        const undYear = getYearData(undData, displayYear);
+        const undOaPct = undYear && undYear.works_count > 0
+            ? ((undYear.oa_works_count / undYear.works_count) * 100).toFixed(0) + '%'
+            : '--';
+        document.getElementById('stat-und-total-works').textContent =
+            `UND: ${formatNumber(undData.works_count)}`;
+        document.getElementById('stat-und-oa-pct').textContent =
+            `UND: ${undOaPct}`;
+        document.getElementById('stat-und-citations').textContent =
+            `UND: ${formatNumber(undData.cited_by_count)}`;
+        document.getElementById('stat-und-hindex').textContent =
+            `UND: ${undData.summary_stats?.h_index?.toLocaleString() || '--'}`;
+        document.getElementById('stat-und-mean-cite').textContent =
+            `UND: ${undData.summary_stats?.['2yr_mean_citedness']?.toFixed(2) || '--'}`;
+    }
+}
+
+// --- Publication Volume ---
+function renderVolumeChart(inst) {
+    destroyChart('volume');
+    const data = filterYears(inst.counts_by_year || [])
+        .filter(d => d.year <= CURRENT_YEAR);
+    const isOther = currentInstitutionId !== DEFAULT_INSTITUTION;
+    const instName = INSTITUTIONS[currentInstitutionId] || 'Selected';
+
+    const datasets = [{
+        label: isOther ? instName : 'Total Works',
+        data: data.map(d => d.works_count),
+        backgroundColor: 'rgba(0, 154, 68, 0.7)',
+        borderColor: 'rgba(0, 154, 68, 1)',
+        borderWidth: 1,
+        borderRadius: 3,
+        order: 1
+    }];
+
+    // Add subtle UND overlay when viewing another institution
+    if (isOther && undData) {
+        const undYears = filterYears(undData.counts_by_year || [])
+            .filter(d => d.year <= CURRENT_YEAR);
+        const undMap = {};
+        undYears.forEach(d => { undMap[d.year] = d.works_count; });
+        datasets.push({
+            label: 'UND',
+            data: data.map(d => undMap[d.year] || null),
+            type: 'line',
+            borderColor: 'rgba(0, 154, 68, 0.35)',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            tension: 0.3,
+            order: 0
+        });
+    }
+
+    const ctx = document.getElementById('chart-volume').getContext('2d');
+    charts.volume = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.year),
+            datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: isOther },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} works`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: v => formatNumber(v) },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// --- OA Rate Trend ---
+function renderOATrendChart(inst) {
+    destroyChart('oaTrend');
+    const data = filterYears(inst.counts_by_year || [])
+        .filter(d => d.year <= CURRENT_YEAR);
+    const isOther = currentInstitutionId !== DEFAULT_INSTITUTION;
+    const instName = INSTITUTIONS[currentInstitutionId] || 'Selected';
+
+    // Compute OA rate % for each year
+    const oaRates = data.map(d =>
+        d.works_count > 0 ? ((d.oa_works_count / d.works_count) * 100) : 0
+    );
+
+    const datasets = [
+        {
+            label: 'Open Access',
+            data: data.map(d => d.oa_works_count),
+            borderColor: '#009A44',
+            backgroundColor: 'rgba(0, 154, 68, 0.15)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            yAxisID: 'y'
+        },
+        {
+            label: 'Closed',
+            data: data.map(d => d.works_count - d.oa_works_count),
+            borderColor: '#9ca3af',
+            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            yAxisID: 'y'
+        },
+        {
+            label: isOther ? `OA Rate (${instName})` : 'OA Rate %',
+            data: oaRates,
+            borderColor: '#f59e0b',
+            backgroundColor: 'transparent',
+            borderWidth: 2.5,
+            pointRadius: 3,
+            pointBackgroundColor: '#f59e0b',
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'yRate',
+            type: 'line'
+        }
+    ];
+
+    // Add UND OA rate overlay when viewing another institution
+    if (isOther && undData) {
+        const undYears = filterYears(undData.counts_by_year || [])
+            .filter(d => d.year <= CURRENT_YEAR);
+        const undMap = {};
+        undYears.forEach(d => {
+            undMap[d.year] = d.works_count > 0
+                ? ((d.oa_works_count / d.works_count) * 100) : null;
+        });
+        datasets.push({
+            label: 'OA Rate (UND)',
+            data: data.map(d => undMap[d.year] ?? null),
+            borderColor: 'rgba(245, 158, 11, 0.35)',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'yRate',
+            type: 'line'
+        });
+    }
+
+    const ctx = document.getElementById('chart-oa-trend').getContext('2d');
+    charts.oaTrend = new Chart(ctx, {
+        type: 'line',
+        data: { labels: data.map(d => d.year), datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: (item) => item.text !== 'Closed' // hide 'Closed' from legend to reduce clutter
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.dataset.yAxisID === 'yRate') {
+                                return ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`;
+                            }
+                            return ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    position: 'left',
+                    title: { display: true, text: 'Number of Works', font: { size: 11 } },
+                    ticks: { callback: v => formatNumber(v) },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                yRate: {
+                    position: 'right',
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'OA Rate %', font: { size: 11 }, color: '#f59e0b' },
+                    ticks: {
+                        callback: v => v + '%',
+                        color: '#f59e0b'
+                    },
+                    grid: { display: false }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// --- OA Status Doughnut ---
+async function renderOAStatusChart(instId) {
+    destroyChart('oaStatus');
+    const res = await fetchGroupBy(instId, 'open_access.oa_status');
+    const groups = res.group_by || [];
+
+    const order = ['gold', 'green', 'hybrid', 'bronze', 'diamond', 'closed'];
+    const sorted = order
+        .map(key => groups.find(g => g.key === key))
+        .filter(Boolean);
+
+    const ctx = document.getElementById('chart-oa-status').getContext('2d');
+    charts.oaStatus = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: sorted.map(g => OA_STATUS_META[g.key]?.label || g.key_display_name),
+            datasets: [{
+                data: sorted.map(g => g.count),
+                backgroundColor: sorted.map(g => OA_STATUS_META[g.key]?.color || '#ccc'),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: { position: 'right', labels: { font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                            return ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// --- Research Domains ---
+async function renderDomainsChart(instId) {
+    destroyChart('domains');
+    const res = await fetchGroupBy(instId, 'primary_topic.domain.id');
+    const groups = (res.group_by || [])
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6);
+
+    const colors = ['#009A44', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+    const ctx = document.getElementById('chart-domains').getContext('2d');
+    charts.domains = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: groups.map(g => g.key_display_name),
+            datasets: [{
+                data: groups.map(g => g.count),
+                backgroundColor: colors.slice(0, groups.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: { position: 'right', labels: { font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                            return ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// --- College/School Breakdown ---
+async function renderCollegesChart(instId) {
+    destroyChart('colleges');
+    const isUND = instId === DEFAULT_INSTITUTION;
+    const titleEl = document.getElementById('college-title');
+    titleEl.textContent = isUND
+        ? 'Estimated College/School Breakdown'
+        : 'Research Fields Breakdown';
+
+    const res = await fetchGroupBy(instId, 'primary_topic.field.id');
+    let groups = (res.group_by || []).sort((a, b) => b.count - a.count);
+
+    let chartData;
+    if (isUND) {
+        // Map fields to colleges and aggregate
+        const collegeCounts = {};
+        groups.forEach(g => {
+            const fieldName = g.key_display_name.toLowerCase();
+            const college = UND_COLLEGE_MAP[fieldName] || 'Other';
+            collegeCounts[college] = (collegeCounts[college] || 0) + g.count;
+        });
+        chartData = Object.entries(collegeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .filter(([name]) => name !== 'Other' && name !== 'Multidisciplinary');
+    } else {
+        // Show top fields directly
+        chartData = groups.slice(0, 10).map(g => [g.key_display_name, g.count]);
+    }
+
+    const colors = ['#009A44', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6',
+                    '#06b6d4', '#ec4899', '#84cc16', '#d97706', '#6366f1'];
+    const ctx = document.getElementById('chart-colleges').getContext('2d');
+    charts.colleges = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: chartData.map(d => d[0]),
+            datasets: [{
+                data: chartData.map(d => d[1]),
+                backgroundColor: colors.slice(0, chartData.length),
+                borderRadius: 3
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.parsed.x.toLocaleString()} works`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: { callback: v => formatNumber(v) },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+}
+
+// --- APC Exposure ---
+async function renderAPCChart(instId) {
+    destroyChart('apc');
+    // Fetch gold+hybrid works per year, and their APC sums
+    // We'll estimate by getting counts and average APCs
+    const years = [];
+    for (let y = Math.max(MIN_YEAR, 2015); y <= CURRENT_YEAR; y++) years.push(y);
+
+    // Fetch APC data for gold+hybrid articles per year
+    // Use group_by publication_year with OA filter
+    const [goldRes, hybridRes] = await Promise.all([
+        fetchGroupBy(instId, 'publication_year', ',open_access.oa_status:gold'),
+        fetchGroupBy(instId, 'publication_year', ',open_access.oa_status:hybrid')
+    ]);
+
+    const goldByYear = {};
+    (goldRes.group_by || []).forEach(g => { goldByYear[g.key] = g.count; });
+    const hybridByYear = {};
+    (hybridRes.group_by || []).forEach(g => { hybridByYear[g.key] = g.count; });
+
+    // Average APC estimates (from our research: gold ~$2,300, hybrid ~$3,000)
+    const AVG_GOLD_APC = 2300;
+    const AVG_HYBRID_APC = 3000;
+
+    const filteredYears = years.filter(y => (goldByYear[y] || 0) + (hybridByYear[y] || 0) > 0);
+    const estimates = filteredYears.map(y => {
+        const goldCount = goldByYear[y] || 0;
+        const hybridCount = hybridByYear[y] || 0;
+        return (goldCount * AVG_GOLD_APC) + (hybridCount * AVG_HYBRID_APC);
+    });
+
+    const ctx = document.getElementById('chart-apc').getContext('2d');
+    charts.apc = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: filteredYears,
+            datasets: [{
+                label: 'Estimated APC Exposure',
+                data: estimates,
+                backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                borderColor: 'rgba(245, 158, 11, 1)',
+                borderWidth: 1,
+                borderRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${formatCurrency(ctx.parsed.y)}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: v => formatCurrency(v) },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// --- Top Journals ---
+async function renderJournalsList(instId) {
+    const res = await fetchGroupBy(instId, 'primary_location.source.id');
+    const groups = (res.group_by || [])
+        .filter(g => g.key_display_name && g.key_display_name !== 'unknown')
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15);
+
+    const listEl = document.getElementById('journals-list');
+    listEl.innerHTML = groups.map((g, i) => `
+        <li>
+            <span class="bar-rank">${i + 1}.</span>
+            <span class="bar-name" title="${g.key_display_name}">${g.key_display_name}</span>
+            <span class="bar-value">${g.count.toLocaleString()}</span>
+        </li>
+    `).join('');
+}
+
+// --- Most Cited Works ---
+async function renderCitedWorks(instId) {
+    const tbody = document.getElementById('cited-works-body');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--und-gray);">Loading...</td></tr>';
+
+    try {
+        const filter = `authorships.institutions.id:${instId}`;
+        const res = await fetchOA('/works', {
+            filter,
+            sort: 'cited_by_count:desc',
+            per_page: '10'
+        });
+
+        const works = res.results || [];
+
+        if (!works.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--und-gray);">No data available</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = works.map((w, i) => {
+            // Build author string (first 3 + et al.)
+            const authors = (w.authorships || [])
+                .slice(0, 3)
+                .map(a => a.author?.display_name || 'Unknown')
+                .join(', ');
+            const authorStr = (w.authorships || []).length > 3
+                ? authors + ' et al.'
+                : authors;
+
+            // Journal/venue name
+            const venue = w.primary_location?.source?.display_name || '';
+
+            // DOI-based links
+            const doi = w.doi ? w.doi.replace('https://doi.org/', '') : null;
+            const titleLink = w.doi
+                ? `<a href="${w.doi}" target="_blank" rel="noopener">${escapeHtml(w.display_name)}</a>`
+                : escapeHtml(w.display_name);
+            const libkeyLink = doi
+                ? `<a class="libkey-link" href="https://libkey.io/${doi}" target="_blank" rel="noopener">Check CFL access &rarr;</a>`
+                : '';
+
+            return `<tr>
+                <td style="color: var(--und-gray); font-size: 0.8rem;">${i + 1}</td>
+                <td>
+                    <div class="work-title">${titleLink}</div>
+                    <div class="work-meta">${escapeHtml(authorStr)}${venue ? ' &middot; ' + escapeHtml(venue) : ''}</div>
+                    ${libkeyLink}
+                </td>
+                <td>${w.publication_year || '--'}</td>
+                <td class="cite-count">${(w.cited_by_count || 0).toLocaleString()}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        console.error('Cited works error:', err);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--und-gray);">Unable to load cited works</td></tr>';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// MAIN LOADER
+// ============================================================
+async function loadDashboard(instId) {
+    const overlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    overlay.classList.add('active');
+    loadingText.textContent = `Loading ${INSTITUTIONS[instId] || 'institution'} data...`;
+
+    try {
+        // Ensure we have UND baseline data cached (for comparison overlays)
+        if (!undData) {
+            undData = await fetchInstitution(DEFAULT_INSTITUTION);
+        }
+
+        // Fetch the selected institution data
+        const inst = (instId === DEFAULT_INSTITUTION) ? undData : await fetchInstitution(instId);
+
+        renderStatCards(inst);
+        renderVolumeChart(inst);
+        renderOATrendChart(inst);
+
+        // Fetch remaining panels in parallel
+        await Promise.all([
+            renderOAStatusChart(instId),
+            renderDomainsChart(instId),
+            renderCollegesChart(instId),
+            renderAPCChart(instId),
+            renderJournalsList(instId),
+            renderCitedWorks(instId)
+        ]);
+    } catch (err) {
+        console.error('Dashboard load error:', err);
+        document.getElementById('stat-total-works').textContent = 'Error';
+    } finally {
+        overlay.classList.remove('active');
+    }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+    // Populate institution dropdown
+    const select = document.getElementById('institution-select');
+
+    // UND first, then alphabetical
+    const sortedEntries = Object.entries(INSTITUTIONS).sort((a, b) => {
+        if (a[0] === DEFAULT_INSTITUTION) return -1;
+        if (b[0] === DEFAULT_INSTITUTION) return 1;
+        return a[1].localeCompare(b[1]);
+    });
+
+    sortedEntries.forEach(([id, name]) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = name;
+        if (id === DEFAULT_INSTITUTION) opt.selected = true;
+        select.appendChild(opt);
+    });
+
+    select.addEventListener('change', (e) => {
+        currentInstitutionId = e.target.value;
+        loadDashboard(currentInstitutionId);
+    });
+
+    // Initial load
+    loadDashboard(DEFAULT_INSTITUTION);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
