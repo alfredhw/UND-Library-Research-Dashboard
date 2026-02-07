@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,23 +76,44 @@
             font-size: 0.85rem;
             font-weight: 500;
         }
-        .institution-select {
-            padding: 0.5rem 0.75rem;
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .control-group label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+        .header-select {
+            padding: 0.4rem 0.6rem;
             border: 2px solid rgba(255,255,255,0.3);
             border-radius: var(--radius);
             background: rgba(255,255,255,0.15);
             color: var(--und-white);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             cursor: pointer;
-            min-width: 260px;
         }
-        .institution-select option {
+        .header-select.wide { min-width: 260px; }
+        .header-select.narrow { min-width: 80px; }
+        .header-select option {
             background: var(--und-white);
             color: var(--und-black);
         }
-        .institution-select:focus {
+        .header-select:focus {
             outline: none;
             border-color: rgba(255,255,255,0.7);
+        }
+        .year-dash {
+            font-size: 0.85rem;
+            opacity: 0.7;
         }
 
         /* Loading overlay */
@@ -338,7 +360,8 @@
         }
         @media (max-width: 768px) {
             .header { padding: 1rem; flex-direction: column; align-items: flex-start; }
-            .institution-select { min-width: 100%; }
+            .header-controls { flex-direction: column; align-items: flex-start; width: 100%; }
+            .header-select.wide { min-width: 100%; }
             .dashboard { padding: 0 1rem; gap: 1rem; }
             .panel-third { grid-column: span 12; }
             .stat-card .stat-value { font-size: 1.5rem; }
@@ -353,8 +376,18 @@
         <p>Faculty scholarship &amp; Open Access metrics powered by OpenAlex</p>
     </div>
     <div class="header-right">
-        <label for="institution-select">Institution:</label>
-        <select id="institution-select" class="institution-select"></select>
+        <div class="header-controls">
+            <div class="control-group">
+                <label for="institution-select">Institution:</label>
+                <select id="institution-select" class="header-select wide"></select>
+            </div>
+            <div class="control-group">
+                <label>Years:</label>
+                <select id="year-from" class="header-select narrow"></select>
+                <span class="year-dash">&ndash;</span>
+                <select id="year-to" class="header-select narrow"></select>
+            </div>
+        </div>
     </div>
 </header>
 
@@ -415,7 +448,7 @@
 
     <!-- Row 3: OA Breakdown + Research Domains -->
     <div class="card panel-third">
-        <div class="card-title">OA Status Breakdown (All Time)</div>
+        <div class="card-title" id="oa-status-title">OA Status Breakdown</div>
         <div class="chart-container medium">
             <canvas id="chart-oa-status"></canvas>
         </div>
@@ -548,6 +581,16 @@ let currentInstitutionId = DEFAULT_INSTITUTION;
 let charts = {};
 let undData = null; // Cached UND institution data for comparison overlays
 const CURRENT_YEAR = new Date().getFullYear();
+let yearFrom = MIN_YEAR;
+let yearTo = CURRENT_YEAR;
+
+// Year filter helpers
+function getYearFilter() {
+    return `,publication_year:${yearFrom}-${yearTo}`;
+}
+function isAllTime() {
+    return yearFrom <= MIN_YEAR && yearTo >= CURRENT_YEAR;
+}
 
 // ============================================================
 // API HELPERS
@@ -574,9 +617,9 @@ async function fetchGroupBy(instId, groupBy, extraFilters = '') {
     return fetchOA('/works', { filter, group_by: groupBy });
 }
 
-function filterYears(countsByYear, minYear = MIN_YEAR) {
+function filterYears(countsByYear, minYear = MIN_YEAR, maxYear = CURRENT_YEAR) {
     return countsByYear
-        .filter(d => d.year >= minYear)
+        .filter(d => d.year >= minYear && d.year <= maxYear)
         .sort((a, b) => a.year - b.year);
 }
 
@@ -615,36 +658,35 @@ function getYearData(inst, year) {
     return (inst.counts_by_year || []).find(d => d.year === year);
 }
 
+function sumYearRange(inst, field) {
+    return (inst.counts_by_year || [])
+        .filter(d => d.year >= yearFrom && d.year <= yearTo)
+        .reduce((sum, d) => sum + (d[field] || 0), 0);
+}
+
 function renderStatCards(inst) {
-    const cby = filterYears(inst.counts_by_year || []);
-    // Use current calendar year, not latest year in data
-    const currentYearData = getYearData(inst, CURRENT_YEAR);
-    // Fall back to last complete year if current year has no data
-    const displayYear = currentYearData && currentYearData.works_count > 0
-        ? CURRENT_YEAR : CURRENT_YEAR - 1;
-    const yearData = getYearData(inst, displayYear);
+    const rangeWorks = sumYearRange(inst, 'works_count');
+    const rangeOA = sumYearRange(inst, 'oa_works_count');
+    const rangeCited = sumYearRange(inst, 'cited_by_count');
+    const rangeLabel = isAllTime() ? 'All time' : `${yearFrom}–${yearTo}`;
 
-    const totalWorks = inst.works_count || 0;
-    const totalCited = inst.cited_by_count || 0;
+    document.getElementById('stat-total-works').textContent = formatNumber(rangeWorks);
+    document.getElementById('stat-total-works-sub').textContent = rangeLabel;
 
-    document.getElementById('stat-total-works').textContent = formatNumber(totalWorks);
-    document.getElementById('stat-total-works-sub').textContent =
-        yearData ? `${yearData.works_count.toLocaleString()} in ${displayYear}` : '';
-
-    // OA pct from display year
-    if (yearData && yearData.works_count > 0) {
-        const oaPct = ((yearData.oa_works_count / yearData.works_count) * 100).toFixed(0);
+    // OA pct within range
+    if (rangeWorks > 0) {
+        const oaPct = ((rangeOA / rangeWorks) * 100).toFixed(0);
         document.getElementById('stat-oa-pct').textContent = oaPct + '%';
-        document.getElementById('stat-oa-pct-sub').textContent = `${displayYear} publications`;
+        document.getElementById('stat-oa-pct-sub').textContent = rangeLabel;
     } else {
         document.getElementById('stat-oa-pct').textContent = '--';
         document.getElementById('stat-oa-pct-sub').textContent = '';
     }
 
-    document.getElementById('stat-citations').textContent = formatNumber(totalCited);
-    document.getElementById('stat-citations-sub').textContent =
-        yearData ? `${formatNumber(yearData.cited_by_count)} in ${displayYear}` : '';
+    document.getElementById('stat-citations').textContent = formatNumber(rangeCited);
+    document.getElementById('stat-citations-sub').textContent = rangeLabel;
 
+    // H-index and mean citedness are institution-level (not year-filterable)
     document.getElementById('stat-hindex').textContent =
         inst.summary_stats?.h_index?.toLocaleString() || '--';
     document.getElementById('stat-mean-cite').textContent =
@@ -656,16 +698,17 @@ function renderStatCards(inst) {
     undEls.forEach(el => el.classList.toggle('visible', isOther));
 
     if (isOther && undData) {
-        const undYear = getYearData(undData, displayYear);
-        const undOaPct = undYear && undYear.works_count > 0
-            ? ((undYear.oa_works_count / undYear.works_count) * 100).toFixed(0) + '%'
-            : '--';
+        const undRangeWorks = sumYearRange(undData, 'works_count');
+        const undRangeOA = sumYearRange(undData, 'oa_works_count');
+        const undRangeCited = sumYearRange(undData, 'cited_by_count');
+        const undOaPct = undRangeWorks > 0
+            ? ((undRangeOA / undRangeWorks) * 100).toFixed(0) + '%' : '--';
         document.getElementById('stat-und-total-works').textContent =
-            `UND: ${formatNumber(undData.works_count)}`;
+            `UND: ${formatNumber(undRangeWorks)}`;
         document.getElementById('stat-und-oa-pct').textContent =
             `UND: ${undOaPct}`;
         document.getElementById('stat-und-citations').textContent =
-            `UND: ${formatNumber(undData.cited_by_count)}`;
+            `UND: ${formatNumber(undRangeCited)}`;
         document.getElementById('stat-und-hindex').textContent =
             `UND: ${undData.summary_stats?.h_index?.toLocaleString() || '--'}`;
         document.getElementById('stat-und-mean-cite').textContent =
@@ -676,8 +719,7 @@ function renderStatCards(inst) {
 // --- Publication Volume ---
 function renderVolumeChart(inst) {
     destroyChart('volume');
-    const data = filterYears(inst.counts_by_year || [])
-        .filter(d => d.year <= CURRENT_YEAR);
+    const data = filterYears(inst.counts_by_year || [], yearFrom, yearTo);
     const isOther = currentInstitutionId !== DEFAULT_INSTITUTION;
     const instName = INSTITUTIONS[currentInstitutionId] || 'Selected';
 
@@ -693,8 +735,7 @@ function renderVolumeChart(inst) {
 
     // Add subtle UND overlay when viewing another institution
     if (isOther && undData) {
-        const undYears = filterYears(undData.counts_by_year || [])
-            .filter(d => d.year <= CURRENT_YEAR);
+        const undYears = filterYears(undData.counts_by_year || [], yearFrom, yearTo);
         const undMap = {};
         undYears.forEach(d => { undMap[d.year] = d.works_count; });
         datasets.push({
@@ -746,8 +787,7 @@ function renderVolumeChart(inst) {
 // --- OA Rate Trend ---
 function renderOATrendChart(inst) {
     destroyChart('oaTrend');
-    const data = filterYears(inst.counts_by_year || [])
-        .filter(d => d.year <= CURRENT_YEAR);
+    const data = filterYears(inst.counts_by_year || [], yearFrom, yearTo);
     const isOther = currentInstitutionId !== DEFAULT_INSTITUTION;
     const instName = INSTITUTIONS[currentInstitutionId] || 'Selected';
 
@@ -794,8 +834,7 @@ function renderOATrendChart(inst) {
 
     // Add UND OA rate overlay when viewing another institution
     if (isOther && undData) {
-        const undYears = filterYears(undData.counts_by_year || [])
-            .filter(d => d.year <= CURRENT_YEAR);
+        const undYears = filterYears(undData.counts_by_year || [], yearFrom, yearTo);
         const undMap = {};
         undYears.forEach(d => {
             undMap[d.year] = d.works_count > 0
@@ -871,7 +910,9 @@ function renderOATrendChart(inst) {
 // --- OA Status Doughnut ---
 async function renderOAStatusChart(instId) {
     destroyChart('oaStatus');
-    const res = await fetchGroupBy(instId, 'open_access.oa_status');
+    document.getElementById('oa-status-title').textContent =
+        isAllTime() ? 'OA Status Breakdown' : `OA Status Breakdown (${yearFrom}–${yearTo})`;
+    const res = await fetchGroupBy(instId, 'open_access.oa_status', getYearFilter());
     const groups = res.group_by || [];
 
     const order = ['gold', 'green', 'hybrid', 'bronze', 'diamond', 'closed'];
@@ -914,7 +955,7 @@ async function renderOAStatusChart(instId) {
 // --- Research Domains ---
 async function renderDomainsChart(instId) {
     destroyChart('domains');
-    const res = await fetchGroupBy(instId, 'primary_topic.domain.id');
+    const res = await fetchGroupBy(instId, 'primary_topic.domain.id', getYearFilter());
     const groups = (res.group_by || [])
         .sort((a, b) => b.count - a.count)
         .slice(0, 6);
@@ -961,7 +1002,7 @@ async function renderCollegesChart(instId) {
         ? 'Estimated College/School Breakdown'
         : 'Research Fields Breakdown';
 
-    const res = await fetchGroupBy(instId, 'primary_topic.field.id');
+    const res = await fetchGroupBy(instId, 'primary_topic.field.id', getYearFilter());
     let groups = (res.group_by || []).sort((a, b) => b.count - a.count);
 
     let chartData;
@@ -1027,7 +1068,8 @@ async function renderAPCChart(instId) {
     // Fetch gold+hybrid works per year, and their APC sums
     // We'll estimate by getting counts and average APCs
     const years = [];
-    for (let y = Math.max(MIN_YEAR, 2015); y <= CURRENT_YEAR; y++) years.push(y);
+    const apcStart = Math.max(yearFrom, 2015);
+    for (let y = apcStart; y <= yearTo; y++) years.push(y);
 
     // Fetch APC data for gold+hybrid articles per year
     // Use group_by publication_year with OA filter
@@ -1091,7 +1133,7 @@ async function renderAPCChart(instId) {
 
 // --- Top Journals ---
 async function renderJournalsList(instId) {
-    const res = await fetchGroupBy(instId, 'primary_location.source.id');
+    const res = await fetchGroupBy(instId, 'primary_location.source.id', getYearFilter());
     const groups = (res.group_by || [])
         .filter(g => g.key_display_name && g.key_display_name !== 'unknown')
         .sort((a, b) => b.count - a.count)
@@ -1113,7 +1155,7 @@ async function renderCitedWorks(instId) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--und-gray);">Loading...</td></tr>';
 
     try {
-        const filter = `authorships.institutions.id:${instId}`;
+        const filter = `authorships.institutions.id:${instId},publication_year:${yearFrom}-${yearTo}`;
         const res = await fetchOA('/works', {
             filter,
             sort: 'cited_by_count:desc',
@@ -1216,14 +1258,11 @@ async function loadDashboard(instId) {
 function init() {
     // Populate institution dropdown
     const select = document.getElementById('institution-select');
-
-    // UND first, then alphabetical
     const sortedEntries = Object.entries(INSTITUTIONS).sort((a, b) => {
         if (a[0] === DEFAULT_INSTITUTION) return -1;
         if (b[0] === DEFAULT_INSTITUTION) return 1;
         return a[1].localeCompare(b[1]);
     });
-
     sortedEntries.forEach(([id, name]) => {
         const opt = document.createElement('option');
         opt.value = id;
@@ -1231,9 +1270,47 @@ function init() {
         if (id === DEFAULT_INSTITUTION) opt.selected = true;
         select.appendChild(opt);
     });
-
     select.addEventListener('change', (e) => {
         currentInstitutionId = e.target.value;
+        loadDashboard(currentInstitutionId);
+    });
+
+    // Populate year range dropdowns
+    const yearFromEl = document.getElementById('year-from');
+    const yearToEl = document.getElementById('year-to');
+    const EARLIEST_YEAR = 2000;
+
+    for (let y = EARLIEST_YEAR; y <= CURRENT_YEAR; y++) {
+        const optFrom = document.createElement('option');
+        optFrom.value = y;
+        optFrom.textContent = y;
+        if (y === MIN_YEAR) optFrom.selected = true;
+        yearFromEl.appendChild(optFrom);
+
+        const optTo = document.createElement('option');
+        optTo.value = y;
+        optTo.textContent = y;
+        if (y === CURRENT_YEAR) optTo.selected = true;
+        yearToEl.appendChild(optTo);
+    }
+
+    yearFromEl.addEventListener('change', () => {
+        yearFrom = parseInt(yearFromEl.value);
+        // Ensure "to" is not before "from"
+        if (yearTo < yearFrom) {
+            yearTo = yearFrom;
+            yearToEl.value = yearTo;
+        }
+        loadDashboard(currentInstitutionId);
+    });
+
+    yearToEl.addEventListener('change', () => {
+        yearTo = parseInt(yearToEl.value);
+        // Ensure "from" is not after "to"
+        if (yearFrom > yearTo) {
+            yearFrom = yearTo;
+            yearFromEl.value = yearFrom;
+        }
         loadDashboard(currentInstitutionId);
     });
 
@@ -1246,3 +1323,4 @@ document.addEventListener('DOMContentLoaded', init);
 
 </body>
 </html>
+
