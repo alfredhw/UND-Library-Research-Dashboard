@@ -45,6 +45,7 @@
             background: var(--und-gray-light);
             color: var(--und-black);
             line-height: 1.5;
+            overflow-x: hidden;
         }
 
         /* Header */
@@ -101,7 +102,7 @@
             font-size: 0.85rem;
             cursor: pointer;
         }
-        .header-select.wide { min-width: 260px; }
+        .header-select.wide { min-width: 260px; max-width: 100%; }
         .header-select.narrow { min-width: 80px; }
         .header-select option {
             background: var(--und-white);
@@ -163,6 +164,7 @@
             box-shadow: var(--card-shadow);
             padding: 1.25rem;
             transition: box-shadow 0.2s;
+            overflow: hidden;
         }
         .card:hover { box-shadow: var(--card-shadow-hover); }
         .card-title {
@@ -270,7 +272,11 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.82rem;
+            table-layout: auto;
         }
+        .cited-works-table .col-rank { width: 2.5rem; }
+        .cited-works-table .col-year { width: 4rem; }
+        .cited-works-table .col-cite { width: 5rem; }
         .cited-works-table thead th {
             text-align: left;
             font-weight: 600;
@@ -360,11 +366,71 @@
         }
         @media (max-width: 768px) {
             .header { padding: 1rem; flex-direction: column; align-items: flex-start; }
-            .header-controls { flex-direction: column; align-items: flex-start; width: 100%; }
-            .header-select.wide { min-width: 100%; }
-            .dashboard { padding: 0 1rem; gap: 1rem; }
+            .header-left h1 { font-size: 1.25rem; }
+            .header-right { width: 100%; }
+            .header-controls { flex-direction: column; align-items: stretch; width: 100%; gap: 0.5rem; }
+            .control-group { width: 100%; }
+            .header-select.wide { min-width: 0; width: 100%; }
+            .dashboard { padding: 0 0.75rem; gap: 0.75rem; }
             .panel-third { grid-column: span 12; }
-            .stat-card .stat-value { font-size: 1.5rem; }
+            .stat-cards { gap: 0.5rem; }
+            .stat-card {
+                min-width: calc(50% - 0.5rem);
+                padding: 1rem 0.75rem;
+            }
+            .stat-card .stat-value { font-size: 1.4rem; }
+            .stat-card .stat-label { font-size: 0.7rem; }
+            .card { padding: 1rem; }
+
+            /* Cited works table: stack on mobile */
+            .cited-works-table { font-size: 0.78rem; }
+            .cited-works-table thead { display: none; }
+            .cited-works-table tbody tr {
+                display: flex;
+                flex-wrap: wrap;
+                padding: 0.6rem 0;
+                gap: 0.15rem;
+            }
+            .cited-works-table tbody td {
+                padding: 0.15rem 0.4rem;
+            }
+            .cited-works-table tbody td:first-child {
+                /* rank number */
+                flex: 0 0 2rem;
+                font-weight: 600;
+            }
+            .cited-works-table tbody td:nth-child(2) {
+                /* title/author block */
+                flex: 1 1 calc(100% - 6rem);
+                min-width: 0;
+            }
+            .cited-works-table tbody td:nth-child(3) {
+                /* year - inline with citations */
+                flex: 0 0 auto;
+                font-size: 0.72rem;
+                color: var(--und-gray);
+            }
+            .cited-works-table tbody td:nth-child(4) {
+                /* citations */
+                flex: 0 0 auto;
+                text-align: left;
+            }
+            .cited-works-table .work-title { font-size: 0.82rem; }
+            .cited-works-table .work-title a {
+                white-space: normal;
+                word-break: break-word;
+            }
+
+            /* Journal list */
+            .bar-list li { font-size: 0.78rem; gap: 0.5rem; }
+            .bar-list .bar-name { font-size: 0.78rem; }
+        }
+
+        @media (max-width: 400px) {
+            .stat-card {
+                min-width: 100%;
+            }
+            .stat-card .stat-value { font-size: 1.3rem; }
         }
     </style>
 </head>
@@ -489,10 +555,10 @@
         <table class="cited-works-table">
             <thead>
                 <tr>
-                    <th style="width: 2.5rem;">#</th>
+                    <th class="col-rank">#</th>
                     <th>Work</th>
-                    <th style="width: 5rem;">Year</th>
-                    <th style="width: 6rem;">Citations</th>
+                    <th class="col-year">Year</th>
+                    <th class="col-cite">Citations</th>
                 </tr>
             </thead>
             <tbody id="cited-works-body">
@@ -1323,4 +1389,3 @@ document.addEventListener('DOMContentLoaded', init);
 
 </body>
 </html>
-
